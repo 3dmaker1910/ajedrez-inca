@@ -1,0 +1,17 @@
+// Models
+export 'models/tile.dart';
+export 'models/module_pattern.dart';
+export 'models/chess_module.dart';
+export 'models/board_coordinate.dart';
+// Board
+export 'board/game_board.dart';
+// Pieces
+export 'pieces/chess_piece.dart';
+export 'pieces/movement_calculator.dart';
+export 'pieces/game_state.dart';
+// UI
+export 'ui/chess_colors.dart';
+export 'ui/board_painter.dart';
+export 'ui/chess_board_widget.dart';
+export 'ui/module_palette_widget.dart';
+export 'ui/game_screen.dart';
