@@ -1,0 +1,72 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Create audio asset placeholder
+        run: |
+          mkdir -p assets/audio
+          # Download a short royalty-free ambient track
+          curl -L --silent --max-time 30 \
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" \
+            -o assets/audio/andean_music.mp3 || \
+          touch assets/audio/andean_music.mp3
+          ls -lh assets/audio/
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --no-shrink
+
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/apk-release.apk \
+             build/app/outputs/flutter-apk/AjedrezInca.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AjedrezInca-APK
+          path: build/app/outputs/flutter-apk/AjedrezInca.apk
+          retention-days: 7
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag: v1.0.0
+          name: "🏻️ Ajedrez Inca v1.0.0"
+          body: |
+            # 🌏 ​ Ajedrez Inca v1.0.0 
+            
+            El juego de estrategia modular inspirado en el Tahuantinsuyo.
+            
+            **Reglas:**
+            - 7 piezas por bando: Rey, 2 Torres, 2 Alfiles, 2 Caballos
+            - Tablero modular ensamblable
+            - Precipicios Sagrados que solo el Caballo puede cruzar
+            - Gana quien captura al Rey
+          files: build/app/outputs/flutter-apk/AjedrezInca.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
