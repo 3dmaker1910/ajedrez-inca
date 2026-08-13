@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -48,24 +51,15 @@ jobs:
         with:
           name: AjedrezInka-APK
           path: build/app/outputs/flutter-apk/AjedrezInka.apk
-          retention-days: 7
+          retention-days: 90
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag: v1.0.0
-          name: "🏔️ Ajedrez Inka v1.0.0"
-          body: |
-            # 🏔️ Ajedrez Inka v1.0.0
-            
-            El juego de estrategia modular inspirado en el Tahuantinsuyo.
-            
-            **Reglas:**
-            - 7 piezas por bando: Rey, 2 Torres, 2 Alfiles, 2 Caballos
-            - Tablero modular ensamblable
-            - Precipicios Sagrados que solo el Caballo puede cruzar
-            - Gana quien captura al Rey
-          files: build/app/outputs/flutter-apk/AjedrezInka.apk
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
-          prerelease: false
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v1.0.0 --yes 2>/dev/null || true
+          gh release create v1.0.0 \
+            build/app/outputs/flutter-apk/AjedrezInka.apk \
+            --title "🏔️ Ajedrez Inka v1.0.0" \
+            --notes "El juego de estrategia modular inspirado en el Tahuantinsuyo." \
+            --latest
