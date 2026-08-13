@@ -39,11 +39,11 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --no-shrink
+        run: flutter build apk --debug
 
       - name: Rename APK
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk \
+          mv build/app/outputs/flutter-apk/app-debug.apk \
              build/app/outputs/flutter-apk/AjedrezInka.apk
 
       - name: Upload APK artifact
