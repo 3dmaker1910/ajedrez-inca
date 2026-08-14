@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../audio/chess_audio_manager.dart';
+import '../models/game_mode.dart';
 import 'game_screen.dart';
+
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -14,6 +16,7 @@ class _IntroScreenState extends State<IntroScreen>
   late AnimationController _controller;
   late Animation<double> _scrollAnimation;
   late Animation<double> _fadeAnimation;
+  bool _showModeSelector = false;
 
   static const _crawlText = '''
 En los Andes del tiempo eterno,
@@ -66,9 +69,9 @@ el Trono del Sol?''';
 
     _controller.forward();
 
-    // Auto-navigate after 8 seconds
-    Future.delayed(const Duration(seconds: 8), () {
-      if (mounted) _navigateToGame();
+    // Show mode selector after 6 seconds
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _showModeSelector = true);
     });
   }
 
@@ -78,9 +81,9 @@ el Trono del Sol?''';
     super.dispose();
   }
 
-  void _navigateToGame() {
+  void _navigateToGame(GameMode mode) {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const GameScreen()),
+      MaterialPageRoute(builder: (_) => GameScreen(gameMode: mode)),
     );
   }
 
@@ -158,38 +161,91 @@ el Trono del Sol?''';
             ),
           ),
 
-          // "COMENZAR" button at bottom
+          // Mode selector at bottom (replaces single "COMENZAR" button)
           Positioned(
-            bottom: 50,
+            bottom: 40,
             left: 0,
             right: 0,
-            child: Center(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: const Color(0xFFFFD700),
-                  side: const BorderSide(color: Color(0xFFFFD700), width: 2),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 16,
+            child: AnimatedOpacity(
+              opacity: _showModeSelector ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 800),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'ELIGE TU BATALLA',
+                    style: TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 3,
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _ModeButton(
+                        icon: Icons.computer,
+                        label: 'vs COMPUTADORA',
+                        onTap: () => _navigateToGame(GameMode.vsComputer),
+                      ),
+                      const SizedBox(width: 16),
+                      _ModeButton(
+                        icon: Icons.people,
+                        label: '2 JUGADORES',
+                        onTap: () => _navigateToGame(GameMode.twoPlayers),
+                      ),
+                    ],
                   ),
-                ),
-                onPressed: _navigateToGame,
-                child: const Text(
-                  'COMENZAR',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 4,
-                  ),
-                ),
+                ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFFFD700), width: 2),
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.black.withOpacity(0.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFFFFD700), size: 28),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

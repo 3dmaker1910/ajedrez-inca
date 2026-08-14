@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../ai/simple_ai.dart';
 import '../board/game_board.dart';
 import '../models/board_coordinate.dart';
 import '../models/chess_module.dart';
@@ -7,11 +8,15 @@ import '../pieces/chess_piece.dart';
 import '../pieces/game_state.dart';
 import 'chess_board_widget.dart';
 import 'chess_colors.dart';
+import '../models/game_mode.dart';
 import 'module_palette_widget.dart';
 
 /// Main game screen — assembles board + palette + status bar.
+/// Now accepts a [gameMode] to enable AI or 2-player mode.
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  final GameMode gameMode;
+
+  const GameScreen({super.key, required this.gameMode});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -23,6 +28,8 @@ class _GameScreenState extends State<GameScreen> {
   ModulePatternType _selectedPattern = ModulePatternType.full;
   int               _pendingRotation = 0;
   String            _statusMsg       = 'Construye el tablero';
+  final SimpleAI    _ai = SimpleAI();
+  bool              _aiThinking = false;
 
   @override
   void initState() {
@@ -32,41 +39,118 @@ class _GameScreenState extends State<GameScreen> {
 
   void _initGame() {
     _board = GameBoard();
-    // Single full module at center coordinate (0,0)
+
+    // Build a 3-wide x 2-tall board (6 modules = 9 cols x 6 rows)
+    // Module coordinates: row 0 = (0,0),(1,0),(2,0); row 1 = (0,1),(1,1),(2,1)
     _board.placeFirstModule(
       ChessModule(patternType: ModulePatternType.full),
       const BoardCoordinate(0, 0),
     );
+    _board.placeModule(
+      ChessModule(patternType: ModulePatternType.full),
+      const BoardCoordinate(1, 0),
+    );
+    _board.placeModule(
+      ChessModule(patternType: ModulePatternType.full),
+      const BoardCoordinate(2, 0),
+    );
+    _board.placeModule(
+      ChessModule(patternType: ModulePatternType.full),
+      const BoardCoordinate(0, 1),
+    );
+    _board.placeModule(
+      ChessModule(patternType: ModulePatternType.full),
+      const BoardCoordinate(1, 1),
+    );
+    _board.placeModule(
+      ChessModule(patternType: ModulePatternType.full),
+      const BoardCoordinate(2, 1),
+    );
 
     _gameState = GameState(board: _board);
 
-    // Place kings on valid tiles of the single module
-    // Module at (0,0) occupies world tiles rows 0-2, cols 0-2
+    // Place 7 pieces per side on the 9-col x 6-row board
+    // White pieces on row 5 (bottom): R, Kn, B, K, B, Kn, R (cols 1-7)
     _gameState.addPiece(const ChessPiece(
-      type: PieceType.king,
-      color: PlayerColor.white,
-      position: TilePosition(1, 1),
+      type: PieceType.rook, color: PlayerColor.white,
+      position: TilePosition(5, 1),
     ));
     _gameState.addPiece(const ChessPiece(
-      type: PieceType.king,
-      color: PlayerColor.black,
+      type: PieceType.knight, color: PlayerColor.white,
+      position: TilePosition(5, 2),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.bishop, color: PlayerColor.white,
+      position: TilePosition(5, 3),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.king, color: PlayerColor.white,
+      position: TilePosition(5, 4),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.bishop, color: PlayerColor.white,
+      position: TilePosition(5, 5),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.knight, color: PlayerColor.white,
+      position: TilePosition(5, 6),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.rook, color: PlayerColor.white,
+      position: TilePosition(5, 7),
+    ));
+
+    // Black pieces on row 0 (top): R, Kn, B, K, B, Kn, R (cols 1-7)
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.rook, color: PlayerColor.black,
+      position: TilePosition(0, 1),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.knight, color: PlayerColor.black,
       position: TilePosition(0, 2),
     ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.bishop, color: PlayerColor.black,
+      position: TilePosition(0, 3),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.king, color: PlayerColor.black,
+      position: TilePosition(0, 4),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.bishop, color: PlayerColor.black,
+      position: TilePosition(0, 5),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.knight, color: PlayerColor.black,
+      position: TilePosition(0, 6),
+    ));
+    _gameState.addPiece(const ChessPiece(
+      type: PieceType.rook, color: PlayerColor.black,
+      position: TilePosition(0, 7),
+    ));
+
+    _aiThinking = false;
     _statusMsg = '♟ Turno de las Blancas';
   }
 
   @override
   Widget build(BuildContext context) {
+    final modeLabel = widget.gameMode == GameMode.vsComputer
+        ? 'vs Computadora'
+        : '2 Jugadores';
+
     return Scaffold(
       backgroundColor: ChessColors.background,
       appBar: AppBar(
         backgroundColor: ChessColors.deepPurple,
-        title: const Text(
-          'VIRACOCHA CHESS',
-          style: TextStyle(
+        title: Text(
+          'VIRACOCHA CHESS  ·  $modeLabel',
+          style: const TextStyle(
             color: ChessColors.gold,
             fontWeight: FontWeight.bold,
-            letterSpacing: 3,
+            letterSpacing: 2,
+            fontSize: 14,
           ),
         ),
         actions: [
@@ -80,7 +164,11 @@ class _GameScreenState extends State<GameScreen> {
       body: Column(
         children: [
           // ── Status bar ────────────────────────────────────────────────────
-          _StatusBar(message: _statusMsg, status: _gameState.status),
+          _StatusBar(
+            message: _statusMsg,
+            status: _gameState.status,
+            aiThinking: _aiThinking,
+          ),
 
           // ── Board ─────────────────────────────────────────────────────────
           Expanded(
@@ -95,7 +183,7 @@ class _GameScreenState extends State<GameScreen> {
                       pieces: _gameState.pieces,
                       currentTurn: _gameState.currentTurn,
                       tileSize: 52,
-                      onMove: _handleMove,
+                      onMove: _aiThinking ? null : _handleMove,
                     ),
                   ),
                 ),
@@ -167,20 +255,61 @@ class _GameScreenState extends State<GameScreen> {
   void _handleMove(ChessPiece piece, TilePosition dest) {
     setState(() {
       _gameState.move(piece, dest);
-      switch (_gameState.status) {
-        case GameStatus.whiteWins:
-          _statusMsg = '🏆 ¡Blancas ganan! El Rey negro fue capturado.';
-        case GameStatus.blackWins:
-          _statusMsg = '🏆 ¡Negras ganan! El Rey blanco fue capturado.';
-        case GameStatus.draw:
-          _statusMsg = '🤝 Tablas';
-        case GameStatus.ongoing:
-          final whose = _gameState.currentTurn == PlayerColor.white
-              ? 'Blancas ♟'
-              : 'Negras ♟';
-          _statusMsg = 'Turno de $whose';
+      _updateStatus();
+    });
+
+    // If vs Computer and it's now black's turn, trigger AI
+    if (widget.gameMode == GameMode.vsComputer &&
+        _gameState.isOngoing &&
+        _gameState.currentTurn == PlayerColor.black) {
+      _triggerAI();
+    }
+  }
+
+  void _triggerAI() {
+    setState(() => _aiThinking = true);
+    // Delay to simulate "thinking" and allow UI to update
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted || !_gameState.isOngoing) return;
+      final move = _ai.pickMove(_gameState);
+      if (move != null) {
+        setState(() {
+          _gameState.move(move.piece, move.destination);
+          _aiThinking = false;
+          _updateStatus();
+        });
+      } else {
+        setState(() {
+          _aiThinking = false;
+          _statusMsg = '🤝 La computadora no tiene movimientos. Tablas.';
+        });
       }
     });
+  }
+
+  void _updateStatus() {
+    switch (_gameState.status) {
+      case GameStatus.whiteWins:
+        _statusMsg = '🏆 ¡Blancas ganan! El Rey negro fue capturado.';
+      case GameStatus.blackWins:
+        if (widget.gameMode == GameMode.vsComputer) {
+          _statusMsg = '🏆 ¡La Computadora gana! Tu Rey fue capturado.';
+        } else {
+          _statusMsg = '🏆 ¡Negras ganan! El Rey blanco fue capturado.';
+        }
+      case GameStatus.draw:
+        _statusMsg = '🤝 Tablas';
+      case GameStatus.ongoing:
+        final whose = _gameState.currentTurn == PlayerColor.white
+            ? 'Blancas ♟'
+            : 'Negras ♟';
+        if (widget.gameMode == GameMode.vsComputer &&
+            _gameState.currentTurn == PlayerColor.black) {
+          _statusMsg = '🤖 La computadora piensa...';
+        } else {
+          _statusMsg = 'Turno de $whose';
+        }
+    }
   }
 
   void _addModule() {
@@ -212,8 +341,13 @@ class _GameScreenState extends State<GameScreen> {
 class _StatusBar extends StatelessWidget {
   final String message;
   final GameStatus status;
+  final bool aiThinking;
 
-  const _StatusBar({required this.message, required this.status});
+  const _StatusBar({
+    required this.message,
+    required this.status,
+    this.aiThinking = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -227,11 +361,26 @@ class _StatusBar extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isOver ? Icons.emoji_events : Icons.sports_esports,
+            isOver
+                ? Icons.emoji_events
+                : aiThinking
+                    ? Icons.psychology
+                    : Icons.sports_esports,
             color: ChessColors.gold,
             size: 18,
           ),
           const SizedBox(width: 8),
+          if (aiThinking) ...[
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: ChessColors.gold,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           Text(
             message,
             style: TextStyle(
