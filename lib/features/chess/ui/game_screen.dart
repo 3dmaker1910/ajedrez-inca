@@ -1,6 +1,8 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../ai/simple_ai.dart';
 import '../board/game_board.dart';
+import '../board/board_layouts.dart';
 import '../models/board_coordinate.dart';
 import '../models/chess_module.dart';
 import '../models/module_pattern.dart';
@@ -25,11 +27,13 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameBoard    _board;
   late GameState    _gameState;
+  late BoardLayout  _currentLayout;
   ModulePatternType _selectedPattern = ModulePatternType.full;
   int               _pendingRotation = 0;
   String            _statusMsg       = 'Construye el tablero';
   final SimpleAI    _ai = SimpleAI();
   bool              _aiThinking = false;
+  final Random      _rng = Random();
 
   @override
   void initState() {
@@ -40,98 +44,49 @@ class _GameScreenState extends State<GameScreen> {
   void _initGame() {
     _board = GameBoard();
 
-    // Build a 3-wide x 2-tall board (6 modules = 9 cols x 6 rows)
-    // Module coordinates: row 0 = (0,0),(1,0),(2,0); row 1 = (0,1),(1,1),(2,1)
-    _board.placeFirstModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(0, 0),
-    );
-    _board.placeModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(1, 0),
-    );
-    _board.placeModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(2, 0),
-    );
-    _board.placeModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(0, 1),
-    );
-    _board.placeModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(1, 1),
-    );
-    _board.placeModule(
-      ChessModule(patternType: ModulePatternType.full),
-      const BoardCoordinate(2, 1),
-    );
+    // Pick a random layout from the 4 predefined ones
+    _currentLayout = BoardLayouts.random(_rng);
+
+    // Apply the layout (places modules on the board)
+    _currentLayout.applyTo(_board);
 
     _gameState = GameState(board: _board);
 
-    // Place 7 pieces per side on the 9-col x 6-row board
-    // White pieces on row 5 (bottom): R, Kn, B, K, B, Kn, R (cols 1-7)
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.rook, color: PlayerColor.white,
-      position: TilePosition(5, 1),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.knight, color: PlayerColor.white,
-      position: TilePosition(5, 2),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.bishop, color: PlayerColor.white,
-      position: TilePosition(5, 3),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.king, color: PlayerColor.white,
-      position: TilePosition(5, 4),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.bishop, color: PlayerColor.white,
-      position: TilePosition(5, 5),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.knight, color: PlayerColor.white,
-      position: TilePosition(5, 6),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.rook, color: PlayerColor.white,
-      position: TilePosition(5, 7),
-    ));
+    // Find valid starting positions for pieces
+    final (whitePositions, blackPositions) =
+        _currentLayout.findStartingPositions(_board);
 
-    // Black pieces on row 0 (top): R, Kn, B, K, B, Kn, R (cols 1-7)
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.rook, color: PlayerColor.black,
-      position: TilePosition(0, 1),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.knight, color: PlayerColor.black,
-      position: TilePosition(0, 2),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.bishop, color: PlayerColor.black,
-      position: TilePosition(0, 3),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.king, color: PlayerColor.black,
-      position: TilePosition(0, 4),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.bishop, color: PlayerColor.black,
-      position: TilePosition(0, 5),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.knight, color: PlayerColor.black,
-      position: TilePosition(0, 6),
-    ));
-    _gameState.addPiece(const ChessPiece(
-      type: PieceType.rook, color: PlayerColor.black,
-      position: TilePosition(0, 7),
-    ));
+    // Piece order: Rook, Knight, Bishop, King, Bishop, Knight, Rook
+    const pieceOrder = [
+      PieceType.rook,
+      PieceType.knight,
+      PieceType.bishop,
+      PieceType.king,
+      PieceType.bishop,
+      PieceType.knight,
+      PieceType.rook,
+    ];
+
+    // Place white pieces (bottom)
+    for (int i = 0; i < 7 && i < whitePositions.length; i++) {
+      _gameState.addPiece(ChessPiece(
+        type: pieceOrder[i],
+        color: PlayerColor.white,
+        position: whitePositions[i],
+      ));
+    }
+
+    // Place black pieces (top)
+    for (int i = 0; i < 7 && i < blackPositions.length; i++) {
+      _gameState.addPiece(ChessPiece(
+        type: pieceOrder[i],
+        color: PlayerColor.black,
+        position: blackPositions[i],
+      ));
+    }
 
     _aiThinking = false;
-    _statusMsg = '♟ Turno de las Blancas';
+    _statusMsg = '♟ Turno de las Blancas  ·  ${_currentLayout.name}';
   }
 
   @override
@@ -168,6 +123,21 @@ class _GameScreenState extends State<GameScreen> {
             message: _statusMsg,
             status: _gameState.status,
             aiThinking: _aiThinking,
+          ),
+
+          // ── Layout name chip ──────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+            color: ChessColors.deepPurple.withOpacity(0.8),
+            child: Text(
+              '📐 ${_currentLayout.name} — ${_currentLayout.description}',
+              style: TextStyle(
+                color: ChessColors.gold.withOpacity(0.7),
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+            ),
           ),
 
           // ── Board ─────────────────────────────────────────────────────────
@@ -381,12 +351,15 @@ class _StatusBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
-          Text(
-            message,
-            style: TextStyle(
-              color: isOver ? ChessColors.goldLight : ChessColors.gold,
-              fontWeight: isOver ? FontWeight.bold : FontWeight.normal,
-              fontSize: 13,
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: isOver ? ChessColors.goldLight : ChessColors.gold,
+                fontWeight: isOver ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
