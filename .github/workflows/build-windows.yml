@@ -1,0 +1,64 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Create audio asset placeholder
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path assets/audio
+          try {
+            Invoke-WebRequest -Uri "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" -OutFile "assets/audio/andean_music.mp3" -TimeoutSec 30
+          } catch {
+            New-Item -ItemType File -Force -Path "assets/audio/andean_music.mp3"
+          }
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Zip Windows build
+        shell: powershell
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "AjedrezInka-Windows.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AjedrezInka-Windows
+          path: AjedrezInka-Windows.zip
+          retention-days: 90
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release delete v1.0.0-windows --yes 2>/dev/null || true
+          gh release create v1.0.0-windows \
+            AjedrezInka-Windows.zip \
+            --title "🏔️ Ajedrez Inka v1.0.0 - Windows" \
+            --notes "Versión de escritorio para Windows. Descomprime el ZIP y ejecuta AjedrezInka.exe" \
+            --latest
