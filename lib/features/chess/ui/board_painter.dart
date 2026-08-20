@@ -5,11 +5,7 @@ import '../models/tile.dart';
 import '../pieces/chess_piece.dart';
 import 'chess_colors.dart';
 
-/// Renders the entire [GameBoard] using a [CustomPainter].
-///
-/// Layout assumptions (all derived from [tileSize]):
-///  • Each tile is [tileSize]×[tileSize] pixels.
-///  • Module borders are 2px wider than tile borders.
+/// CustomPainter that renders the modular board with visual gaps between modules.
 class BoardPainter extends CustomPainter {
   final GameBoard board;
   final Map<TilePosition, ChessPiece> pieces;
@@ -17,182 +13,219 @@ class BoardPainter extends CustomPainter {
   final List<TilePosition> possibleMoves;
   final double tileSize;
 
-  const BoardPainter({
+  /// Gap between modules (in pixels).
+  static const double moduleGap = 3.0;
+
+  BoardPainter({
     required this.board,
     required this.pieces,
-    this.selectedTile,
-    this.possibleMoves = const [],
-    this.tileSize = 48,
+    required this.selectedTile,
+    required this.possibleMoves,
+    required this.tileSize,
   });
 
-  // ─── Paint ─────────────────────────────────────────────────────────────────
+  /// Calculate the total canvas size accounting for module gaps.
+  static Size totalSize(GameBoard board, double tileSize) {
+    final b = board.bounds;
+    if (b == null) return Size.zero;
+    final moduleCols = ((b.maxCol - b.minCol) ~/ 3) + 1;
+    final moduleRows = ((b.maxRow - b.minRow) ~/ 3) + 1;
+    final width = moduleCols * 3 * tileSize + (moduleCols - 1) * moduleGap;
+    final height = moduleRows * 3 * tileSize + (moduleRows - 1) * moduleGap;
+    return Size(width, height);
+  }
+
+  /// Convert a world tile position to pixel offset on canvas.
+  Offset _tileToPixel(TilePosition pos, ({int minRow, int maxRow, int minCol, int maxCol}) b) {
+    final relCol = pos.col - b.minCol;
+    final relRow = pos.row - b.minRow;
+    // Which module column/row is this tile in?
+    final modCol = relCol ~/ 3;
+    final modRow = relRow ~/ 3;
+    final dx = relCol * tileSize + modCol * moduleGap;
+    final dy = relRow * tileSize + modRow * moduleGap;
+    return Offset(dx, dy);
+  }
+
+  /// Convert pixel offset to world tile position.
+  static TilePosition? pixelToTile(
+    Offset local,
+    GameBoard board,
+    double tileSize,
+  ) {
+    final b = board.bounds;
+    if (b == null) return null;
+    final moduleCols = ((b.maxCol - b.minCol) ~/ 3) + 1;
+    final moduleRows = ((b.maxRow - b.minRow) ~/ 3) + 1;
+
+    // Determine which module column/row we're in
+    final moduleWidthWithGap = 3 * tileSize + moduleGap;
+    int modCol = (local.dx / moduleWidthWithGap).floor();
+    int modRow = (local.dy / moduleWidthWithGap).floor();
+    modCol = modCol.clamp(0, moduleCols - 1);
+    modRow = modRow.clamp(0, moduleRows - 1);
+
+    // Local offset within the module
+    final localInModX = local.dx - modCol * moduleWidthWithGap;
+    final localInModY = local.dy - modRow * moduleWidthWithGap;
+
+    // Check if in the gap zone
+    if (localInModX < 0 || localInModX >= 3 * tileSize) return null;
+    if (localInModY < 0 || localInModY >= 3 * tileSize) return null;
+
+    final tileCol = (localInModX / tileSize).floor();
+    final tileRow = (localInModY / tileSize).floor();
+
+    final worldCol = b.minCol + modCol * 3 + tileCol;
+    final worldRow = b.minRow + modRow * 3 + tileRow;
+    return TilePosition(worldRow, worldCol);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final b = board.bounds;
     if (b == null) return;
 
-    final rowOffset = b.minRow;
-    final colOffset = b.minCol;
+    // Draw module backgrounds and borders first
+    _drawModuleBackgrounds(canvas, b);
 
-    // ── 1. Tile backgrounds ──────────────────────────────────────────────────
+    // Draw tiles
     for (int r = b.minRow; r <= b.maxRow; r++) {
       for (int c = b.minCol; c <= b.maxCol; c++) {
-        final pos   = TilePosition(r, c);
-        final tile  = board.tileAt(pos);
+        final pos = TilePosition(r, c);
+        final tile = board.tileAt(pos);
         if (tile == null) continue;
 
-        final rect = _rectForPos(r, c, rowOffset, colOffset);
-
-        // Checkerboard colouring for normal tiles
-        Color bg;
-        if (tile.isVoid) {
-          bg = ChessColors.voidTile;
-        } else {
-          bg = (r + c).isEven ? ChessColors.normalTileA : ChessColors.normalTileB;
-        }
-
-        canvas.drawRect(rect, Paint()..color = bg);
-
-        // Highlight: selected
-        if (selectedTile == pos) {
-          canvas.drawRect(
-            rect,
-            Paint()
-              ..color = ChessColors.selectedTile.withOpacity(0.55)
-              ..blendMode = BlendMode.srcOver,
-          );
-        }
-
-        // Highlight: possible move
-        if (possibleMoves.contains(pos)) {
-          canvas.drawCircle(
-            rect.center,
-            tileSize * 0.22,
-            Paint()..color = ChessColors.possibleMove,
-          );
-        }
+        final offset = _tileToPixel(pos, b);
+        _drawTile(canvas, offset, pos, tile);
       }
     }
 
-    // ── 2. Module borders ────────────────────────────────────────────────────
-    for (final coord in board.modules.keys) {
-      final startR = coord.y * 3;
-      final startC = coord.x * 3;
-      final left   = (startC - colOffset) * tileSize;
-      final top    = (startR - rowOffset) * tileSize;
-      final rect   = Rect.fromLTWH(left, top, tileSize * 3, tileSize * 3);
-      canvas.drawRect(
-        rect,
-        Paint()
-          ..color = ChessColors.moduleBorder
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0,
-      );
-    }
-
-    // ── 3. Tile grid lines ───────────────────────────────────────────────────
-    final gridPaint = Paint()
-      ..color = ChessColors.moduleBorder.withOpacity(0.25)
-      ..strokeWidth = 0.5;
-
-    final b2 = board.bounds!;
-    for (int r = b2.minRow; r <= b2.maxRow + 1; r++) {
-      final y = (r - rowOffset) * tileSize;
-      canvas.drawLine(
-        Offset(0, y),
-        Offset((b2.maxCol - b2.minCol + 1) * tileSize, y),
-        gridPaint,
-      );
-    }
-    for (int c = b2.minCol; c <= b2.maxCol + 1; c++) {
-      final x = (c - colOffset) * tileSize;
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, (b2.maxRow - b2.minRow + 1) * tileSize),
-        gridPaint,
-      );
-    }
-
-    // ── 4. Pieces ────────────────────────────────────────────────────────────
+    // Draw pieces
     for (final entry in pieces.entries) {
-      final pos  = entry.key;
-      final p    = entry.value;
-      if (!board.isNormalTile(pos)) continue;
-      final rect = _rectForPos(pos.row, pos.col, rowOffset, colOffset);
-      _drawPiece(canvas, rect, p);
+      final offset = _tileToPixel(entry.key, b);
+      _drawPiece(canvas, offset, entry.value);
     }
   }
 
-  // ─── Piece drawing ─────────────────────────────────────────────────────────
+  void _drawModuleBackgrounds(Canvas canvas, ({int minRow, int maxRow, int minCol, int maxCol}) b) {
+    final borderPaint = Paint()
+      ..color = ChessColors.moduleBorder
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
 
-  void _drawPiece(Canvas canvas, Rect rect, ChessPiece piece) {
-    final pieceColor =
-        piece.color == PlayerColor.white ? ChessColors.whitepiece : ChessColors.blackPiece;
-    final strokeColor = ChessColors.pieceStroke;
-    final radius = tileSize * 0.38;
-    final center = rect.center;
+    for (final coord in board.modules.keys) {
+      final relCol = (coord.x * 3) - b.minCol;
+      final relRow = (coord.y * 3) - b.minRow;
+      final modCol = relCol ~/ 3;
+      final modRow = relRow ~/ 3;
+      final dx = relCol * tileSize + modCol * moduleGap;
+      final dy = relRow * tileSize + modRow * moduleGap;
 
-    // Outer glow for better visibility
-    canvas.drawCircle(
-      center,
-      radius + 2,
-      Paint()
-        ..color = strokeColor.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      final rect = Rect.fromLTWH(dx, dy, 3 * tileSize, 3 * tileSize);
+      canvas.drawRect(rect, borderPaint);
+    }
+  }
+
+  void _drawTile(Canvas canvas, Offset offset, TilePosition pos, Tile tile) {
+    final rect = Rect.fromLTWH(offset.dx, offset.dy, tileSize, tileSize);
+
+    if (tile.isVoid) {
+      // Void tiles (precipices) \u2014 dark abyss
+      final paint = Paint()..color = ChessColors.voidTile;
+      canvas.drawRect(rect, paint);
+      // Draw a subtle X pattern
+      final xPaint = Paint()
+        ..color = ChessColors.voidTile.withOpacity(0.3)
+        ..strokeWidth = 0.5
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(rect.topLeft, rect.bottomRight, xPaint);
+      canvas.drawLine(rect.topRight, rect.bottomLeft, xPaint);
+      return;
+    }
+
+    // Normal tile \u2014 checkerboard pattern based on world position
+    final isDark = (pos.row + pos.col) % 2 == 1;
+    final baseColor = isDark ? ChessColors.darkTile : ChessColors.lightTile;
+
+    // Highlight selected
+    Color tileColor;
+    if (pos == selectedTile) {
+      tileColor = ChessColors.selectedTile;
+    } else if (possibleMoves.contains(pos)) {
+      tileColor = ChessColors.possibleMove;
+    } else {
+      tileColor = baseColor;
+    }
+
+    canvas.drawRect(rect, Paint()..color = tileColor);
+
+    // Tile border
+    final borderPaint = Paint()
+      ..color = ChessColors.tileBorder
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+    canvas.drawRect(rect, borderPaint);
+  }
+
+  void _drawPiece(Canvas canvas, Offset offset, ChessPiece piece) {
+    final center = Offset(
+      offset.dx + tileSize / 2,
+      offset.dy + tileSize / 2,
     );
-    canvas.drawCircle(center, radius, Paint()..color = pieceColor);
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = strokeColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
 
-    // Draw piece symbol
-    final label = _pieceSymbol(piece);
+    // Piece background circle
+    final bgPaint = Paint()
+      ..color = piece.color == PlayerColor.white
+          ? ChessColors.whitePiece
+          : ChessColors.blackPiece;
+    canvas.drawCircle(center, tileSize * 0.38, bgPaint);
+
+    // Piece border
+    final borderPaint = Paint()
+      ..color = piece.color == PlayerColor.white
+          ? ChessColors.blackPiece
+          : ChessColors.whitePiece
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, tileSize * 0.38, borderPaint);
+
+    // Piece symbol
+    final symbol = _pieceSymbol(piece);
     final textPainter = TextPainter(
       text: TextSpan(
-        text: label,
+        text: symbol,
         style: TextStyle(
+          fontSize: tileSize * 0.45,
           color: piece.color == PlayerColor.white
-              ? ChessColors.deepPurple
+              ? ChessColors.blackPiece
               : ChessColors.gold,
-          fontSize: tileSize * 0.38,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
     textPainter.paint(
       canvas,
-      center - Offset(textPainter.width / 2, textPainter.height / 2),
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2,
+      ),
     );
   }
 
   String _pieceSymbol(ChessPiece piece) {
     switch (piece.type) {
-      case PieceType.king:   return '♔';
-      case PieceType.rook:   return '♖';
-      case PieceType.bishop: return '♗';
-      case PieceType.knight: return '♘';
+      case PieceType.king:   return '\u265a';
+      case PieceType.rook:   return '\u265c';
+      case PieceType.bishop: return '\u265d';
+      case PieceType.knight: return '\u265e';
     }
   }
 
-  Rect _rectForPos(int r, int c, int rowOffset, int colOffset) => Rect.fromLTWH(
-        (c - colOffset) * tileSize,
-        (r - rowOffset) * tileSize,
-        tileSize,
-        tileSize,
-      );
-
   @override
   bool shouldRepaint(covariant BoardPainter old) =>
-      old.board    != board       ||
-      old.pieces   != pieces      ||
+      old.board != board ||
+      old.pieces != pieces ||
       old.selectedTile != selectedTile ||
       old.possibleMoves != possibleMoves;
 }
