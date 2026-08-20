@@ -18,4 +18,10 @@ class ChessColors {
   static const Color blackPiece     = Color(0xFF1A0A2E);
   static const Color pieceStroke    = Color(0xFFD4AF37);
   static const Color background     = deepPurple;
+
+  // Aliases usados por board_painter.dart
+  static const Color darkTile       = normalTileA;
+  static const Color lightTile      = normalTileB;
+  static const Color tileBorder     = Color(0x336B4FCF); // borde sutil entre casillas
+  static const Color whitePiece     = whitepiece;
 }
