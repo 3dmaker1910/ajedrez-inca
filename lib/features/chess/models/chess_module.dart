@@ -4,12 +4,12 @@ import 'module_pattern.dart';
 /// A 3×3 grid of [Tile]s that forms one module on the board.
 /// Modules can be rotated clockwise in 90° steps.
 class ChessModule {
-  final ModulePatternType patternType;
+  final ModulePatternType? patternType;
   final List<List<Tile>> _grid; // mutable internal state (deep copy on rotate)
   final int rotation; // 0, 90, 180, 270
 
   ChessModule({
-    required this.patternType,
+    required ModulePatternType this.patternType,
     List<List<Tile>>? grid,
     this.rotation = 0,
   }) : _grid = grid ??
@@ -17,6 +17,13 @@ class ChessModule {
                 .grid
                 .map((row) => List<Tile>.from(row))
                 .toList();
+
+  /// Creates a module directly from a 3×3 grid without a named pattern.
+  ChessModule.fromGrid(List<List<Tile>> grid, {this.rotation = 0})
+      : patternType = null,
+        _grid = grid.map((row) => List<Tile>.from(row)).toList() {
+    assert(_grid.length == 3 && _grid.every((r) => r.length == 3));
+  }
 
   /// Returns the tile at [row], [col] (0-indexed, within 0..2).
   Tile tileAt(int row, int col) => _grid[row][col];
@@ -37,11 +44,14 @@ class ChessModule {
         newGrid[c][2 - r] = _grid[r][c];
       }
     }
-    return ChessModule(
-      patternType: patternType,
-      grid: newGrid,
-      rotation: (rotation + 90) % 360,
-    );
+    if (patternType != null) {
+      return ChessModule(
+        patternType: patternType!,
+        grid: newGrid,
+        rotation: (rotation + 90) % 360,
+      );
+    }
+    return ChessModule.fromGrid(newGrid, rotation: (rotation + 90) % 360);
   }
 
   /// Returns a NEW ChessModule rotated [steps]×90° clockwise.
@@ -63,7 +73,8 @@ class ChessModule {
 
   @override
   String toString() {
-    final sb = StringBuffer('ChessModule($patternType, rot=$rotation°)\n');
+    final label = patternType?.name ?? 'custom';
+    final sb = StringBuffer('ChessModule($label, rot=$rotation°)\n');
     for (final row in _grid) {
       sb.writeln(row.map((t) => t.toString()).join(' '));
     }
