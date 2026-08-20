@@ -6,8 +6,8 @@ import '../pieces/movement_calculator.dart';
 import 'board_painter.dart';
 import 'chess_colors.dart';
 
-/// Interactive board widget — handles tap events and delegates painting
-/// to [BoardPainter].
+/// Interactive board widget \u2014 handles tap events and delegates painting
+/// to [BoardPainter]. Supports module gaps for visual separation.
 class ChessBoardWidget extends StatefulWidget {
   final GameBoard board;
   final Map<TilePosition, ChessPiece> pieces;
@@ -44,11 +44,10 @@ class _ChessBoardWidgetState extends State<ChessBoardWidget> {
       );
     }
 
-    final totalWidth  = (b.maxCol - b.minCol + 1) * widget.tileSize;
-    final totalHeight = (b.maxRow - b.minRow + 1) * widget.tileSize;
+    final canvasSize = BoardPainter.totalSize(widget.board, widget.tileSize);
 
     return GestureDetector(
-      onTapDown: (details) => _handleTap(details.localPosition, b),
+      onTapDown: (details) => _handleTap(details.localPosition),
       child: CustomPaint(
         painter: BoardPainter(
           board: widget.board,
@@ -57,18 +56,17 @@ class _ChessBoardWidgetState extends State<ChessBoardWidget> {
           possibleMoves: _possibleMoves,
           tileSize: widget.tileSize,
         ),
-        size: Size(totalWidth, totalHeight),
+        size: canvasSize,
       ),
     );
   }
 
-  void _handleTap(
-    Offset local,
-    ({int minRow, int maxRow, int minCol, int maxCol}) b,
-  ) {
-    final col = b.minCol + (local.dx / widget.tileSize).floor();
-    final row = b.minRow + (local.dy / widget.tileSize).floor();
-    final tapped = TilePosition(row, col);
+  void _handleTap(Offset local) {
+    final tapped = BoardPainter.pixelToTile(local, widget.board, widget.tileSize);
+    if (tapped == null) {
+      setState(() { _selected = null; _possibleMoves = []; });
+      return;
+    }
 
     if (!widget.board.isNormalTile(tapped)) {
       setState(() { _selected = null; _possibleMoves = []; });
