@@ -2,6 +2,7 @@ import 'dart:math';
 import '../models/board_coordinate.dart';
 import '../models/chess_module.dart';
 import '../models/module_pattern.dart';
+import '../models/tile.dart';
 import '../pieces/chess_piece.dart';
 import 'game_board.dart';
 
@@ -65,7 +66,6 @@ class BoardLayout {
         }
       }
       if (normalTiles.length >= 7) {
-        // Center the 7 pieces within available tiles
         final start = (normalTiles.length - 7) ~/ 2;
         blackPositions = normalTiles.sublist(start, start + 7);
         break;
@@ -93,16 +93,132 @@ class BoardLayout {
   }
 }
 
-/// The 4 predefined board layouts for random selection at game start.
+// ─────────────────────────────────────────────────────────────────────────────
+// Random 3×3 (9-module) board generator
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Generates a random 3×3 grid of 9 modules with precipices (voids).
+/// Rules for a fair game:
+///  - The top and bottom rows (y=0 and y=2) always have their center module
+///    (x=1) full, guaranteeing >= 9 tiles in the starting rows for pieces.
+///  - Edge modules (not center) get a random pattern with 0-2 rotations.
+///  - The center module (1,1) is always full.
+///  - Corner modules may get heavier void patterns.
+///  - A minimum of ~60 normal tiles total is enforced.
+class RandomBoardGenerator {
+  RandomBoardGenerator._();
+
+  /// Patterns allowed for corner modules (may have more voids).
+  static const _cornerPatterns = [
+    ModulePatternType.full,
+    ModulePatternType.full,
+    ModulePatternType.cornerCut,
+    ModulePatternType.cornerCut,
+    ModulePatternType.diagonalCut,
+    ModulePatternType.lShape,
+  ];
+
+  /// Patterns allowed for edge modules (moderate voids).
+  static const _edgePatterns = [
+    ModulePatternType.full,
+    ModulePatternType.full,
+    ModulePatternType.full,
+    ModulePatternType.cornerCut,
+    ModulePatternType.tShape,
+  ];
+
+  /// Preferred rotation for corner modules to point voids outward.
+  /// Maps (mx, my) to recommended rotation steps for cornerCut.
+  static const _cornerRotations = {
+    '0,0': 0, // top-left corner void at top-left
+    '2,0': 1, // top-right corner void at top-right
+    '0,2': 3, // bottom-left corner void at bottom-left
+    '2,2': 2, // bottom-right corner void at bottom-right
+  };
+
+  /// Generate a random [BoardLayout] with 9 modules in a 3×3 grid.
+  static BoardLayout generate([Random? rng]) {
+    final r = rng ?? Random();
+    final placements = <ModulePlacement>[];
+
+    for (int my = 0; my < 3; my++) {
+      for (int mx = 0; mx < 3; mx++) {
+        final isCenter = mx == 1 && my == 1;
+        final isCorner = (mx == 0 || mx == 2) && (my == 0 || my == 2);
+        final isTopBottomCenter = mx == 1 && (my == 0 || my == 2);
+
+        ModulePatternType pattern;
+        int rotation;
+
+        if (isCenter || isTopBottomCenter) {
+          // Center and top/bottom center always full for piece placement
+          pattern = ModulePatternType.full;
+          rotation = 0;
+        } else if (isCorner) {
+          pattern = _cornerPatterns[r.nextInt(_cornerPatterns.length)];
+          final key = '$mx,$my';
+          rotation = pattern == ModulePatternType.full
+              ? 0
+              : _cornerRotations[key] ?? r.nextInt(4);
+        } else {
+          // Edge (non-corner, non-center)
+          pattern = _edgePatterns[r.nextInt(_edgePatterns.length)];
+          rotation = r.nextInt(4);
+        }
+
+        placements.add(ModulePlacement(
+          coordinate: BoardCoordinate(mx, my),
+          patternType: pattern,
+          rotationSteps: rotation,
+        ));
+      }
+    }
+
+    // Count normal tiles; if too few, retry (rare)
+    int normalCount = 0;
+    for (final p in placements) {
+      final m = ChessModule(patternType: p.patternType)
+          .rotateClockwiseN(p.rotationSteps);
+      normalCount += m.normalTileCount;
+    }
+    if (normalCount < 60) {
+      return generate(r); // Retry
+    }
+
+    return BoardLayout(
+      name: _generateName(r),
+      description: '$normalCount casillas \u00b7 ${81 - normalCount} precipicios',
+      modules: placements,
+    );
+  }
+
+  static const _names = [
+    'TIAWANAKU',
+    'SACSAYWAMAN',
+    'QORICANCHA',
+    'MACHUPICCHU',
+    'OLLANTAYTAMBO',
+    'VILCABAMBA',
+    'CHOQUEQUIRAO',
+    'PISAC',
+    'MORAY',
+    'TAMBOMACHAY',
+    'HUAYNA PICCHU',
+    'INTI RAYMI',
+  ];
+
+  static String _generateName(Random r) => _names[r.nextInt(_names.length)];
+}
+
+/// Legacy predefined layouts + random generator access.
 class BoardLayouts {
   BoardLayouts._();
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 1. CLÁSICO — Standard 3×2 all-full board (9 cols × 6 rows)
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Legacy layouts (still available for specific game modes) ──────────────
+
   static const clasico = BoardLayout(
-    name: 'CLÁSICO',
-    description: 'Tablero estándar 9×6, sin precipicios',
+    name: 'CL\u00c1SICO',
+    description: 'Tablero est\u00e1ndar 9×6, sin precipicios',
     modules: [
       ModulePlacement(
           coordinate: BoardCoordinate(0, 0),
@@ -125,113 +241,11 @@ class BoardLayouts {
     ],
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 2. DOS ISLAS — Two full islands connected by crossVoid bridge modules
-  //    Layout: [full][crossVoid][full] × 2 rows
-  //    Creates two 3×6 playable islands with only corner-tile crossings
-  // ─────────────────────────────────────────────────────────────────────────
-  static const dosIslas = BoardLayout(
-    name: 'DOS ISLAS',
-    description: 'Dos islas conectadas por puentes angostos',
-    modules: [
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 0),
-          patternType: ModulePatternType.crossVoid),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 1),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 1),
-          patternType: ModulePatternType.crossVoid),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 1),
-          patternType: ModulePatternType.full),
-    ],
-  );
+  /// All legacy layouts.
+  static const List<BoardLayout> legacy = [clasico];
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 3. CHAKANA — Inca cross / hourglass: two wide platforms (9 cols)
-  //    connected by a narrow 3-tile bridge through the center module.
-  //    Layout:
-  //       [0,0][1,0][2,0]   ← top platform (rows 0-2)
-  //            [1,1]        ← narrow bridge (rows 3-5)
-  //       [0,2][1,2][2,2]   ← bottom platform (rows 6-8)
-  // ─────────────────────────────────────────────────────────────────────────
-  static const chakana = BoardLayout(
-    name: 'CHAKANA',
-    description: 'Cruz andina — dos plataformas con puente central',
-    modules: [
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 1),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 2),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 2),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 2),
-          patternType: ModulePatternType.full),
-    ],
-  );
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // 4. FORTALEZA — Fortress with corner-cut modules on all 4 corners.
-  //    Creates an octagonal playable area (7 tiles in edge rows).
-  //    Layout: [cornerCut r0][full][cornerCut r1]
-  //            [cornerCut r3][full][cornerCut r2]
-  // ─────────────────────────────────────────────────────────────────────────
-  static const fortaleza = BoardLayout(
-    name: 'FORTALEZA',
-    description: 'Fortaleza octagonal — esquinas al precipicio',
-    modules: [
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 0),
-          patternType: ModulePatternType.cornerCut,
-          rotationSteps: 0),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 0),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 0),
-          patternType: ModulePatternType.cornerCut,
-          rotationSteps: 1),
-      ModulePlacement(
-          coordinate: BoardCoordinate(0, 1),
-          patternType: ModulePatternType.cornerCut,
-          rotationSteps: 3),
-      ModulePlacement(
-          coordinate: BoardCoordinate(1, 1),
-          patternType: ModulePatternType.full),
-      ModulePlacement(
-          coordinate: BoardCoordinate(2, 1),
-          patternType: ModulePatternType.cornerCut,
-          rotationSteps: 2),
-    ],
-  );
-
-  /// All available layouts.
-  static const List<BoardLayout> all = [clasico, dosIslas, chakana, fortaleza];
-
-  /// Pick a random layout.
-  static BoardLayout random([Random? rng]) {
-    final r = rng ?? Random();
-    return all[r.nextInt(all.length)];
-  }
+  /// Generate a random 3×3 (9-module) board with precipices.
+  /// This is the default for new games.
+  static BoardLayout random([Random? rng]) =>
+      RandomBoardGenerator.generate(rng);
 }
