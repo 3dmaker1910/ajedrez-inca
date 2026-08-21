@@ -131,7 +131,7 @@ class BoardPainter extends CustomPainter {
     final rect = Rect.fromLTWH(offset.dx, offset.dy, tileSize, tileSize);
 
     if (tile.isVoid) {
-      // Void tiles (precipices) \u2014 dark abyss
+      // Void tiles (precipices) — dark abyss
       final paint = Paint()..color = ChessColors.voidTile;
       canvas.drawRect(rect, paint);
       // Draw a subtle X pattern
@@ -144,19 +144,14 @@ class BoardPainter extends CustomPainter {
       return;
     }
 
-    // Normal tile \u2014 checkerboard pattern based on world position
+    // Normal tile — checkerboard pattern based on world position
     final isDark = (pos.row + pos.col) % 2 == 1;
     final baseColor = isDark ? ChessColors.darkTile : ChessColors.lightTile;
 
-    // Highlight selected
-    Color tileColor;
-    if (pos == selectedTile) {
-      tileColor = ChessColors.selectedTile;
-    } else if (possibleMoves.contains(pos)) {
-      tileColor = ChessColors.possibleMove;
-    } else {
-      tileColor = baseColor;
-    }
+    // Solo el selected cambia de color; los posibles movimientos no colorean la casilla
+    final Color tileColor = pos == selectedTile
+        ? ChessColors.selectedTile
+        : baseColor;
 
     canvas.drawRect(rect, Paint()..color = tileColor);
 
@@ -166,6 +161,17 @@ class BoardPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
     canvas.drawRect(rect, borderPaint);
+
+    // Punto sutil para movimientos posibles (reemplaza el relleno celeste)
+    if (possibleMoves.contains(pos)) {
+      canvas.drawCircle(
+        Offset(offset.dx + tileSize / 2, offset.dy + tileSize / 2),
+        tileSize * 0.13,
+        Paint()
+          ..color = const Color(0xAAFFFFFF)
+          ..style = PaintingStyle.fill,
+      );
+    }
   }
 
   void _drawPiece(Canvas canvas, Offset offset, ChessPiece piece) {
@@ -215,10 +221,10 @@ class BoardPainter extends CustomPainter {
 
   String _pieceSymbol(ChessPiece piece) {
     switch (piece.type) {
-      case PieceType.king:   return '\u265a';
-      case PieceType.rook:   return '\u265c';
-      case PieceType.bishop: return '\u265d';
-      case PieceType.knight: return '\u265e';
+      case PieceType.king:   return '♚';
+      case PieceType.rook:   return '♜';
+      case PieceType.bishop: return '♝';
+      case PieceType.knight: return '♞';
     }
   }
 

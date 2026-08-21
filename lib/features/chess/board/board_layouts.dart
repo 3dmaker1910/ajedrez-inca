@@ -97,157 +97,33 @@ class BoardLayout {
 // Random 3×3 (9-module) board generator
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Generates a random 3×3 grid of 9 modules with precipices (voids).
-/// Rules for a fair game:
-///  - The top and bottom rows (y=0 and y=2) always have their center module
-///    (x=1) full, guaranteeing >= 9 tiles in the starting rows for pieces.
-///  - Edge modules (not center) get a random pattern with 0-2 rotations.
-///  - The center module (1,1) is always full.
-///  - Corner modules may get heavier void patterns.
-///  - A minimum of ~60 normal tiles total is enforced (50 for intenso).
+/// Generates a random 3×3 grid of 9 modules, all full.
+/// Los Precipicios Sagrados se asignan aleatoriamente con GameBoard.randomizePrecipicios().
 class RandomBoardGenerator {
   RandomBoardGenerator._();
 
-  // ── Normal difficulty patterns ──────────────────────────────────────────
-
-  /// Patterns allowed for corner modules (may have more voids).
-  static const _cornerPatterns = [
-    ModulePatternType.full,
-    ModulePatternType.full,
-    ModulePatternType.cornerCut,
-    ModulePatternType.cornerCut,
-    ModulePatternType.diagonalCut,
-    ModulePatternType.lShape,
-    ModulePatternType.tShape,
-    ModulePatternType.checkerboard,
-  ];
-
-  /// Patterns allowed for edge modules (moderate voids).
-  static const _edgePatterns = [
-    ModulePatternType.full,
-    ModulePatternType.full,
-    ModulePatternType.full,
-    ModulePatternType.cornerCut,
-    ModulePatternType.tShape,
-    ModulePatternType.diagonalCut,
-    ModulePatternType.checkerboard,
-  ];
-
-  // ── Intenso difficulty patterns ─────────────────────────────────────────
-
-  /// Corner patterns for intenso mode (more precipices).
-  static const _cornerPatternsIntenso = [
-    ModulePatternType.cornerCut,
-    ModulePatternType.diagonalCut,
-    ModulePatternType.lShape,
-    ModulePatternType.checkerboard,
-    ModulePatternType.tShape,
-    ModulePatternType.halfSplit,
-  ];
-
-  /// Edge patterns for intenso mode (more precipices).
-  static const _edgePatternsIntenso = [
-    ModulePatternType.cornerCut,
-    ModulePatternType.tShape,
-    ModulePatternType.diagonalCut,
-    ModulePatternType.checkerboard,
-    ModulePatternType.halfSplit,
-    ModulePatternType.lShape,
-  ];
-
-  /// Preferred rotation for corner modules to point voids outward.
-  /// Maps (mx, my) to recommended rotation steps for cornerCut.
-  static const _cornerRotations = {
-    '0,0': 0, // top-left corner void at top-left
-    '2,0': 1, // top-right corner void at top-right
-    '0,2': 3, // bottom-left corner void at bottom-left
-    '2,2': 2, // bottom-right corner void at bottom-right
-  };
-
-  /// Generate a random [BoardLayout] with 9 modules in a 3×3 grid.
+  /// Genera un [BoardLayout] con 9 módulos en cuadrícula 3×3, todos full.
+  /// Los Precipicios Sagrados se asignan aleatoriamente con GameBoard.randomizePrecipicios().
   static BoardLayout generate([Random? rng]) {
-    return _buildLayout(
-      rng: rng,
-      cornerPatterns: _cornerPatterns,
-      edgePatterns: _edgePatterns,
-      minNormalTiles: 60,
-    );
-  }
-
-  /// Generate a random [BoardLayout] with intenso difficulty (more precipices).
-  static BoardLayout generateIntenso([Random? rng]) {
-    return _buildLayout(
-      rng: rng,
-      cornerPatterns: _cornerPatternsIntenso,
-      edgePatterns: _edgePatternsIntenso,
-      minNormalTiles: 50,
-    );
-  }
-
-  static BoardLayout _buildLayout({
-    Random? rng,
-    required List<ModulePatternType> cornerPatterns,
-    required List<ModulePatternType> edgePatterns,
-    required int minNormalTiles,
-  }) {
     final r = rng ?? Random();
     final placements = <ModulePlacement>[];
-
     for (int my = 0; my < 3; my++) {
       for (int mx = 0; mx < 3; mx++) {
-        final isCenter = mx == 1 && my == 1;
-        final isCorner = (mx == 0 || mx == 2) && (my == 0 || my == 2);
-        final isTopBottomCenter = mx == 1 && (my == 0 || my == 2);
-
-        ModulePatternType pattern;
-        int rotation;
-
-        if (isCenter || isTopBottomCenter) {
-          // Center and top/bottom center always full for piece placement
-          pattern = ModulePatternType.full;
-          rotation = 0;
-        } else if (isCorner) {
-          pattern = cornerPatterns[r.nextInt(cornerPatterns.length)];
-          final key = '$mx,$my';
-          rotation = pattern == ModulePatternType.full
-              ? 0
-              : _cornerRotations[key] ?? r.nextInt(4);
-        } else {
-          // Edge (non-corner, non-center)
-          pattern = edgePatterns[r.nextInt(edgePatterns.length)];
-          rotation = r.nextInt(4);
-        }
-
         placements.add(ModulePlacement(
           coordinate: BoardCoordinate(mx, my),
-          patternType: pattern,
-          rotationSteps: rotation,
+          patternType: ModulePatternType.full,
         ));
       }
     }
-
-    // Count normal tiles; if too few, retry (rare)
-    int normalCount = 0;
-    for (final p in placements) {
-      final m = ChessModule(patternType: p.patternType)
-          .rotateClockwiseN(p.rotationSteps);
-      normalCount += m.normalTileCount;
-    }
-    if (normalCount < minNormalTiles) {
-      return _buildLayout(
-        rng: r,
-        cornerPatterns: cornerPatterns,
-        edgePatterns: edgePatterns,
-        minNormalTiles: minNormalTiles,
-      );
-    }
-
     return BoardLayout(
       name: _generateName(r),
-      description: '$normalCount casillas · ${81 - normalCount} precipicios',
+      description: '63 casillas · 18 precipicios',
       modules: placements,
     );
   }
+
+  /// Alias de generate — la intensidad se controla en la UI.
+  static BoardLayout generateIntenso([Random? rng]) => generate(rng);
 
   static const _names = [
     'TIAWANAKU',
@@ -281,7 +157,7 @@ class RandomBoardGenerator {
 class BoardLayouts {
   BoardLayouts._();
 
-  // ── Legacy layouts (still available for specific game modes) ──────────────
+  // ── Legacy layouts (still available for specific game modes) ────────────
 
   static const clasico = BoardLayout(
     name: 'CLÁSICO',
@@ -308,7 +184,7 @@ class BoardLayouts {
     ],
   );
 
-  // ── Curated preset layouts (9 modules in 3×3 grid) ──────────────────────
+  // ── Curated preset layouts (9 modules in 3×3 grid) ──────────────────
 
   /// Cruz Inka — Esquinas cortadas apuntando hacia afuera.
   static const cruzInka = BoardLayout(

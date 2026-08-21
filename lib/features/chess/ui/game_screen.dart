@@ -12,8 +12,8 @@ import 'chess_board_widget.dart';
 import 'chess_colors.dart';
 import '../models/game_mode.dart';
 
-/// Main game screen \u2014 assembles board + status bar.
-/// The board is now a fixed 3\u00d73 grid (9 modules) with random precipices,
+/// Main game screen — assembles board + status bar.
+/// The board is now a fixed 3×3 grid (9 modules) with random precipices,
 /// generated automatically at game start.
 class GameScreen extends StatefulWidget {
   final GameMode gameMode;
@@ -32,6 +32,8 @@ class _GameScreenState extends State<GameScreen> {
   final SimpleAI    _ai = SimpleAI();
   bool              _aiThinking = false;
   final Random      _rng = Random();
+  int _normalTileCount = 0;
+  int _voidTileCount   = 0;
 
   @override
   void initState() {
@@ -42,11 +44,29 @@ class _GameScreenState extends State<GameScreen> {
   void _initGame() {
     _board = GameBoard();
 
-    // Generate a random 3\u00d73 (9-module) board with precipices
+    // Generate a random 3×3 (9-module) board with precipices
     _currentLayout = BoardLayouts.random(_rng);
 
     // Apply the layout (places all 9 modules on the board)
     _currentLayout.applyTo(_board);
+
+    // Asignar exactamente 2 Precipicios Sagrados aleatorios por módulo
+    _board.randomizePrecipicios(2, _rng);
+
+    // Contar casillas reales post-randomización
+    _normalTileCount = 0;
+    _voidTileCount   = 0;
+    final bds = _board.bounds;
+    if (bds != null) {
+      for (int r = bds.minRow; r <= bds.maxRow; r++) {
+        for (int c = bds.minCol; c <= bds.maxCol; c++) {
+          final tile = _board.tileAt(TilePosition(r, c));
+          if (tile == null) continue;
+          if (tile.isNormal) _normalTileCount++;
+          else _voidTileCount++;
+        }
+      }
+    }
 
     _gameState = GameState(board: _board);
 
@@ -84,7 +104,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     _aiThinking = false;
-    _statusMsg = '\u265f Turno de las Blancas  \u00b7  ${_currentLayout.name}';
+    _statusMsg = '♟ Turno de las Blancas  ·  ${_currentLayout.name}';
   }
 
   @override
@@ -98,7 +118,7 @@ class _GameScreenState extends State<GameScreen> {
       appBar: AppBar(
         backgroundColor: ChessColors.deepPurple,
         title: Text(
-          'VIRACOCHA CHESS  \u00b7  $modeLabel',
+          'VIRACOCHA CHESS  ·  $modeLabel',
           style: const TextStyle(
             color: ChessColors.gold,
             fontWeight: FontWeight.bold,
@@ -116,14 +136,14 @@ class _GameScreenState extends State<GameScreen> {
       ),
       body: Column(
         children: [
-          // \u2500\u2500 Status bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          // ── Status bar ──────────────────────────────────────────────────────────────────
           _StatusBar(
             message: _statusMsg,
             status: _gameState.status,
             aiThinking: _aiThinking,
           ),
 
-          // \u2500\u2500 Layout info chip \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          // ── Layout info chip ──────────────────────────────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -133,7 +153,7 @@ class _GameScreenState extends State<GameScreen> {
                 const Icon(Icons.grid_view, color: ChessColors.gold, size: 14),
                 const SizedBox(width: 6),
                 Text(
-                  '${_currentLayout.name} \u2014 ${_currentLayout.description}',
+                  '${_currentLayout.name} — $_normalTileCount casillas · $_voidTileCount precipicios',
                   style: TextStyle(
                     color: ChessColors.gold.withOpacity(0.8),
                     fontSize: 11,
@@ -142,7 +162,7 @@ class _GameScreenState extends State<GameScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '9 m\u00f3dulos \u00b7 3\u00d73',
+                  '9 módulos · 3×3',
                   style: TextStyle(
                     color: ChessColors.gold.withOpacity(0.5),
                     fontSize: 10,
@@ -152,7 +172,7 @@ class _GameScreenState extends State<GameScreen> {
             ),
           ),
 
-          // \u2500\u2500 Board \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          // ── Board ─────────────────────────────────────────────────────────────────────
           Expanded(
             child: Center(
               child: SingleChildScrollView(
@@ -173,7 +193,7 @@ class _GameScreenState extends State<GameScreen> {
             ),
           ),
 
-          // \u2500\u2500 Bottom info bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+          // ── Bottom info bar ───────────────────────────────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -185,7 +205,7 @@ class _GameScreenState extends State<GameScreen> {
                     color: ChessColors.gold.withOpacity(0.5), size: 14),
                 const SizedBox(width: 6),
                 Text(
-                  'Precipicios = casillas vac\u00edas donde las piezas caen',
+                  'Precipicios = casillas vacías donde las piezas caen',
                   style: TextStyle(
                     color: ChessColors.gold.withOpacity(0.5),
                     fontSize: 10,
@@ -228,7 +248,7 @@ class _GameScreenState extends State<GameScreen> {
       } else {
         setState(() {
           _aiThinking = false;
-          _statusMsg = '\ud83e\udd1d La computadora no tiene movimientos. Tablas.';
+          _statusMsg = '🤝 La computadora no tiene movimientos. Tablas.';
         });
       }
     });
@@ -237,22 +257,22 @@ class _GameScreenState extends State<GameScreen> {
   void _updateStatus() {
     switch (_gameState.status) {
       case GameStatus.whiteWins:
-        _statusMsg = '\ud83c\udfc6 \u00a1Blancas ganan! El Rey negro fue capturado.';
+        _statusMsg = '🏆 ¡Blancas ganan! El Rey negro fue capturado.';
       case GameStatus.blackWins:
         if (widget.gameMode == GameMode.vsComputer) {
-          _statusMsg = '\ud83c\udfc6 \u00a1La Computadora gana! Tu Rey fue capturado.';
+          _statusMsg = '🏆 ¡La Computadora gana! Tu Rey fue capturado.';
         } else {
-          _statusMsg = '\ud83c\udfc6 \u00a1Negras ganan! El Rey blanco fue capturado.';
+          _statusMsg = '🏆 ¡Negras ganan! El Rey blanco fue capturado.';
         }
       case GameStatus.draw:
-        _statusMsg = '\ud83e\udd1d Tablas';
+        _statusMsg = '🤝 Tablas';
       case GameStatus.ongoing:
         final whose = _gameState.currentTurn == PlayerColor.white
-            ? 'Blancas \u265f'
-            : 'Negras \u265f';
+            ? 'Blancas ♟'
+            : 'Negras ♟';
         if (widget.gameMode == GameMode.vsComputer &&
             _gameState.currentTurn == PlayerColor.black) {
-          _statusMsg = '\ud83e\udd16 La computadora piensa...';
+          _statusMsg = '🤖 La computadora piensa...';
         } else {
           _statusMsg = 'Turno de $whose';
         }
@@ -260,7 +280,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 }
 
-// \u2500\u2500\u2500 Reusable widgets \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Reusable widgets ───────────────────────────────────────────────────────────────────────────
 
 class _StatusBar extends StatelessWidget {
   final String message;

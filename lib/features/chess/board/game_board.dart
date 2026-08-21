@@ -1,3 +1,4 @@
+import 'dart:math';
 import '../models/board_coordinate.dart';
 import '../models/chess_module.dart';
 import '../models/tile.dart';
@@ -10,7 +11,7 @@ class GameBoard {
   /// World tile (row, col) origin = top-left of the bounding rect of all modules.
   /// Module at (mx, my) occupies world rows [my*3 .. my*3+2], cols [mx*3 .. mx*3+2].
 
-  // ─── Module Placement ──────────────────────────────────────────────────────
+  // ─── Module Placement ───────────────────────────────────────────────────────────
 
   /// Place the first module (no connectivity check needed).
   bool placeFirstModule(ChessModule module, [BoardCoordinate? at]) {
@@ -40,7 +41,7 @@ class GameBoard {
 
   Map<BoardCoordinate, ChessModule> get modules => Map.unmodifiable(_modules);
 
-  // ─── Connectivity ──────────────────────────────────────────────────────────
+  // ─── Connectivity ──────────────────────────────────────────────────────────────
 
   bool _isConnected(BoardCoordinate coord) =>
       coord.adjacentModules.any((adj) => _modules.containsKey(adj));
@@ -63,7 +64,7 @@ class GameBoard {
     return visited.length == _modules.length;
   }
 
-  // ─── Tile Lookup ───────────────────────────────────────────────────────────
+  // ─── Tile Lookup ───────────────────────────────────────────────────────────────
 
   /// Returns the [Tile] at absolute world position [pos], or `null` if out of bounds.
   Tile? tileAt(TilePosition pos) {
@@ -90,7 +91,7 @@ class GameBoard {
     return BoardCoordinate(mx, my);
   }
 
-  // ─── Bounds ────────────────────────────────────────────────────────────────
+  // ─── Bounds ────────────────────────────────────────────────────────────────────
 
   /// Bounding box of all world tiles (inclusive).
   ({int minRow, int maxRow, int minCol, int maxCol})? get bounds {
@@ -111,6 +112,46 @@ class GameBoard {
       minCol: minX * 3,
       maxCol: maxX * 3 + 2,
     );
+  }
+
+
+  /// Asigna exactamente [precipiciosPerModule] celdas void (Precipicios Sagrados)
+  /// de forma aleatoria en cada módulo del tablero.
+  /// Las filas extremas (top de módulos superiores, bottom de módulos inferiores)
+  /// quedan protegidas para garantizar filas de inicio de piezas sin precipicios.
+  void randomizePrecipicios(int precipiciosPerModule, [Random? rng]) {
+    final r = rng ?? Random();
+    final b = bounds;
+    if (b == null) return;
+
+    final maxModuleY = (b.maxRow - b.minRow) ~/ 3;
+
+    for (final coord in _modules.keys.toList()) {
+      // Reconstruir grid como todo normal
+      final grid = List.generate(
+        3,
+        (_) => List<Tile>.filled(3, const Tile(TileType.normal)),
+      );
+
+      // Celdas elegibles para void (excluye fila 0 de módulos top, fila 2 de módulos bottom)
+      final eligible = <(int, int)>[];
+      for (int row = 0; row < 3; row++) {
+        if (coord.y == 0 && row == 0) continue;
+        if (coord.y == maxModuleY && row == 2) continue;
+        for (int col = 0; col < 3; col++) {
+          eligible.add((row, col));
+        }
+      }
+
+      eligible.shuffle(r);
+      final count = precipiciosPerModule.clamp(0, eligible.length);
+      for (int i = 0; i < count; i++) {
+        final (row, col) = eligible[i];
+        grid[row][col] = const Tile(TileType.void_);
+      }
+
+      _modules[coord] = ChessModule.fromGrid(grid);
+    }
   }
 
   @override
